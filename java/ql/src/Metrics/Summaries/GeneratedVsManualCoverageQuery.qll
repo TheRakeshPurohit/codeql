@@ -17,12 +17,12 @@ private int getNumMadModeledApis(string package, string provenance, string apiSu
       (
         // "auto-only"
         not sc.hasManualModel() and
-        sc.hasProvenance("df-generated") and
+        sc.hasGeneratedModel() and
         provenance = "generated"
         or
         sc.hasManualModel() and
         (
-          if sc.hasProvenance("df-generated")
+          if sc.hasGeneratedModel()
           then
             // "both"
             provenance = "both"
@@ -45,12 +45,10 @@ private int getNumApis(string package, string apiSubset) {
 
 /** Holds if the given `callable` belongs to the specified `apiSubset`. */
 private predicate callableSubset(Callable callable, string apiSubset) {
-  apiSubset in ["topJdkApis", "allApis"] and
-  (
-    if apiSubset = "topJdkApis"
-    then exists(TopJdkApi topJdkApi | callable = topJdkApi.asCallable())
-    else apiSubset = "allApis"
-  )
+  apiSubset = "topJdkApis" and
+  callable instanceof TopJdkApi
+  or
+  apiSubset = "allApis"
 }
 
 /**

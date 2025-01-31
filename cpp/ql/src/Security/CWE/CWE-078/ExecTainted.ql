@@ -19,7 +19,6 @@ import semmle.code.cpp.security.Security
 import semmle.code.cpp.valuenumbering.GlobalValueNumbering
 import semmle.code.cpp.ir.IR
 import semmle.code.cpp.ir.dataflow.TaintTracking
-import semmle.code.cpp.ir.dataflow.TaintTracking2
 import semmle.code.cpp.security.FlowSources
 import semmle.code.cpp.models.implementations.Strcat
 import ExecTaint::PathGraph
@@ -133,8 +132,6 @@ module ExecTaintConfig implements DataFlow::StateConfigSig {
   }
 
   predicate isBarrier(DataFlow::Node node) { isBarrierImpl(node) }
-
-  predicate isBarrier(DataFlow::Node node, FlowState state) { none() }
 
   predicate isBarrierOut(DataFlow::Node node) {
     isSink(node, _) // Prevent duplicates along a call chain, since `shellCommand` will include wrappers
