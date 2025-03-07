@@ -1,13 +1,11 @@
 import java
 import semmle.code.java.security.TemplateInjectionQuery
-import TestUtilities.InlineExpectationsTest
+import utils.test.InlineExpectationsTest
 
-class TemplateInjectionTest extends InlineExpectationsTest {
-  TemplateInjectionTest() { this = "TemplateInjectionTest" }
+module TemplateInjectionTest implements TestSig {
+  string getARelevantTag() { result = "hasTemplateInjection" }
 
-  override string getARelevantTag() { result = "hasTemplateInjection" }
-
-  override predicate hasActualResult(Location location, string element, string tag, string value) {
+  predicate hasActualResult(Location location, string element, string tag, string value) {
     tag = "hasTemplateInjection" and
     exists(DataFlow::Node sink | TemplateInjectionFlow::flowTo(sink) |
       sink.getLocation() = location and
@@ -16,3 +14,5 @@ class TemplateInjectionTest extends InlineExpectationsTest {
     )
   }
 }
+
+import MakeTest<TemplateInjectionTest>

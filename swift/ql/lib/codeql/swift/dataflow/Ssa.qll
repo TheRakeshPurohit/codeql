@@ -6,20 +6,20 @@ module Ssa {
   private import codeql.swift.controlflow.ControlFlowGraph
   private import codeql.swift.controlflow.BasicBlocks as BasicBlocks
 
-  private module SsaInput implements SsaImplCommon::InputSig {
+  private module SsaInput implements SsaImplCommon::InputSig<Location> {
     private import internal.DataFlowPrivate
-    private import codeql.swift.controlflow.ControlFlowGraph
+    private import codeql.swift.controlflow.ControlFlowGraph as Cfg
     private import codeql.swift.controlflow.CfgNodes
 
     class BasicBlock = BasicBlocks::BasicBlock;
+
+    class ControlFlowNode = Cfg::ControlFlowNode;
 
     BasicBlock getImmediateBasicBlockDominator(BasicBlock bb) {
       result = bb.getImmediateDominator()
     }
 
     BasicBlock getABasicBlockSuccessor(BasicBlock bb) { result = bb.getASuccessor() }
-
-    class ExitBasicBlock = BasicBlocks::ExitBasicBlock;
 
     private newtype TSourceVariable =
       TNormalSourceVariable(VarDecl v) or
@@ -33,6 +33,12 @@ module Ssa {
       EntryNode asKeyPath() { none() }
 
       DeclRefExpr getAnAccess() { result.getDecl() = this.asVarDecl() }
+
+      Location getLocation() {
+        result = this.asVarDecl().getLocation()
+        or
+        result = this.asKeyPath().getLocation()
+      }
     }
 
     private class NormalSourceVariable extends SourceVariable, TNormalSourceVariable {
@@ -127,12 +133,12 @@ module Ssa {
   /**
    * INTERNAL: Do not use.
    */
-  module SsaImpl = SsaImplCommon::Make<SsaInput>;
+  module SsaImpl = SsaImplCommon::Make<Location, SsaInput>;
 
   cached
   class Definition extends SsaImpl::Definition {
     cached
-    Location getLocation() { none() }
+    override Location getLocation() { none() }
 
     cached
     ControlFlowNode getARead() {
@@ -184,9 +190,7 @@ module Ssa {
      */
     cached
     predicate assigns(CfgNode value) {
-      exists(
-        AssignExpr a, SsaInput::BasicBlock bb, int i // TODO: use CFG node for assignment expr
-      |
+      exists(AssignExpr a, SsaInput::BasicBlock bb, int i |
         this.definesAt(_, bb, i) and
         a = bb.getNode(i).getNode().asAstNode() and
         value.getNode().asAstNode() = a.getSource()

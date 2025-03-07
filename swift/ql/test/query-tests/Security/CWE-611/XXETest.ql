@@ -1,7 +1,7 @@
 import swift
 import codeql.swift.dataflow.FlowSources
 import codeql.swift.security.XXEQuery
-import TestUtilities.InlineExpectationsTest
+import utils.test.InlineExpectationsTest
 
 class TestRemoteSource extends RemoteFlowSource {
   TestRemoteSource() { this.asExpr().(ApplyExpr).getStaticTarget().getName().matches("source%") }
@@ -9,12 +9,10 @@ class TestRemoteSource extends RemoteFlowSource {
   override string getSourceType() { result = "Test source" }
 }
 
-class XxeTest extends InlineExpectationsTest {
-  XxeTest() { this = "XxeTest" }
+module XxeTest implements TestSig {
+  string getARelevantTag() { result = "hasXXE" }
 
-  override string getARelevantTag() { result = "hasXXE" }
-
-  override predicate hasActualResult(Location location, string element, string tag, string value) {
+  predicate hasActualResult(Location location, string element, string tag, string value) {
     exists(DataFlow::Node source, DataFlow::Node sink, Expr sinkExpr |
       XxeFlow::flow(source, sink) and
       sinkExpr = sink.asExpr() and
@@ -25,3 +23,5 @@ class XxeTest extends InlineExpectationsTest {
     )
   }
 }
+
+import MakeTest<XxeTest>
