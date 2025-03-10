@@ -61,10 +61,6 @@ codeql::InterpolatedStringLiteralExpr ExprTranslator::translateInterpolatedStrin
     const swift::InterpolatedStringLiteralExpr& expr) {
   auto entry = createExprEntry(expr);
   entry.interpolation_expr = dispatcher.fetchOptionalLabel(expr.getInterpolationExpr());
-  // TODO we should be extracting getInterpolationCount and getLiteralCapacity directly to ints
-  // these expressions here are just an internal thing, the ints are actually directly available
-  entry.interpolation_count_expr = dispatcher.fetchOptionalLabel(expr.getInterpolationCountExpr());
-  entry.literal_capacity_expr = dispatcher.fetchOptionalLabel(expr.getLiteralCapacityExpr());
   entry.appending_expr = dispatcher.fetchOptionalLabel(expr.getAppendingExpr());
   return entry;
 }
@@ -382,13 +378,8 @@ codeql::KeyPathExpr ExprTranslator::translateKeyPathExpr(const swift::KeyPathExp
     for (const auto& component : expr.getComponents()) {
       entry.components.push_back(emitKeyPathComponent(component));
     }
-    if (auto rootTypeRepr = expr.getRootType()) {
-      auto keyPathType = expr.getType()->getAs<swift::BoundGenericClassType>();
-      CODEQL_EXPECT_OR(return entry, keyPathType, "KeyPathExpr must have BoundGenericClassType");
-      auto keyPathTypeArgs = keyPathType->getGenericArgs();
-      CODEQL_EXPECT_OR(return entry, keyPathTypeArgs.size() != 0,
-                              "KeyPathExpr type must have generic args");
-      entry.root = dispatcher.fetchLabel(rootTypeRepr, keyPathTypeArgs[0]);
+    if (auto rootTypeRepr = expr.getExplicitRootType()) {
+      entry.root = dispatcher.fetchLabel(rootTypeRepr, expr.getRootType());
     }
   }
   return entry;
@@ -407,7 +398,7 @@ codeql::ForceValueExpr ExprTranslator::translateForceValueExpr(const swift::Forc
   return entry;
 }
 
-codeql::IfExpr ExprTranslator::translateIfExpr(const swift::IfExpr& expr) {
+codeql::IfExpr ExprTranslator::translateTernaryExpr(const swift::TernaryExpr& expr) {
   auto entry = createExprEntry(expr);
   entry.condition = dispatcher.fetchLabel(expr.getCondExpr());
   entry.then_expr = dispatcher.fetchLabel(expr.getThenExpr());
@@ -464,7 +455,17 @@ codeql::UnresolvedMemberExpr ExprTranslator::translateUnresolvedMemberExpr(
 
 codeql::SequenceExpr ExprTranslator::translateSequenceExpr(const swift::SequenceExpr& expr) {
   auto entry = createExprEntry(expr);
-  entry.elements = dispatcher.fetchRepeatedLabels(expr.getElements());
+  // SequenceExpr represents a flat tree of expressions with elements at odd indices being the
+  // parents of the elements with even indices, so we only extract the "parent" elements here. In
+  // case there is a single child, we extract it as a parent. See
+  // https://github.com/github/codeql/pull/14119 and commit message for more details.
+  if (expr.getNumElements() == 1) {
+    entry.elements = dispatcher.fetchRepeatedLabels(expr.getElements());
+  } else {
+    for (int i = 1; i < expr.getNumElements(); i += 2) {
+      entry.elements.emplace_back(dispatcher.fetchLabel(expr.getElement(i)));
+    }
+  }
   return entry;
 }
 
@@ -627,6 +628,46 @@ codeql::RegexLiteralExpr ExprTranslator::translateRegexLiteralExpr(
   // the pattern has enclosing '/' delimiters, we'd rather get it without
   entry.pattern = pattern.substr(1, pattern.size() - 2);
   entry.version = expr.getVersion();
+  return entry;
+}
+
+codeql::SingleValueStmtExpr ExprTranslator::translateSingleValueStmtExpr(
+    const swift::SingleValueStmtExpr& expr) {
+  auto entry = createExprEntry(expr);
+  entry.stmt = dispatcher.fetchLabel(expr.getStmt());
+  return entry;
+}
+
+codeql::PackExpansionExpr ExprTranslator::translatePackExpansionExpr(
+    const swift::PackExpansionExpr& expr) {
+  auto entry = createExprEntry(expr);
+  entry.pattern_expr = dispatcher.fetchLabel(expr.getPatternExpr());
+  return entry;
+}
+
+codeql::PackElementExpr ExprTranslator::translatePackElementExpr(
+    const swift::PackElementExpr& expr) {
+  auto entry = createExprEntry(expr);
+  entry.sub_expr = dispatcher.fetchLabel(expr.getPackRefExpr());
+  return entry;
+}
+
+codeql::CopyExpr ExprTranslator::translateCopyExpr(const swift::CopyExpr& expr) {
+  auto entry = createExprEntry(expr);
+  entry.sub_expr = dispatcher.fetchLabel(expr.getSubExpr());
+  return entry;
+}
+
+codeql::ConsumeExpr ExprTranslator::translateConsumeExpr(const swift::ConsumeExpr& expr) {
+  auto entry = createExprEntry(expr);
+  entry.sub_expr = dispatcher.fetchLabel(expr.getSubExpr());
+  return entry;
+}
+
+codeql::MaterializePackExpr ExprTranslator::translateMaterializePackExpr(
+    const swift::MaterializePackExpr& expr) {
+  auto entry = createExprEntry(expr);
+  entry.sub_expr = dispatcher.fetchLabel(expr.getFromExpr());
   return entry;
 }
 

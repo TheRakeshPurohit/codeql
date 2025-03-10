@@ -5,6 +5,7 @@
 import javascript
 private import semmle.javascript.dataflow.internal.FlowSteps as FlowSteps
 private import semmle.javascript.dataflow.internal.PreCallGraphStep
+private import semmle.javascript.ViewComponentInput
 
 /**
  * Gets a reference to the 'React' object.
@@ -852,13 +853,13 @@ private class StateTaintStep extends TaintTracking::SharedTaintStep {
 }
 
 /**
- * A taint propagating data flow edge for assignments of the form `c1.props.p = v`,
+ * A data propagating data flow edge for assignments of the form `c1.props.p = v`,
  * where `c1` is an instance of React component `C`; in this case, we consider
- * taint to flow from `v` to any read of `c2.props.p`, where `c2`
+ * data to flow from `v` to any read of `c2.props.p`, where `c2`
  * also is an instance of `C`.
  */
-private class PropsTaintStep extends TaintTracking::SharedTaintStep {
-  override predicate viewComponentStep(DataFlow::Node pred, DataFlow::Node succ) {
+private class PropsFlowStep extends PreCallGraphStep {
+  override predicate step(DataFlow::Node pred, DataFlow::Node succ) {
     exists(ReactComponent c, string name, DataFlow::PropRead prn |
       prn = c.getAPropRead(name) or
       prn = c.getAPreviousPropsSource().getAPropertyRead(name)
@@ -867,4 +868,10 @@ private class PropsTaintStep extends TaintTracking::SharedTaintStep {
       succ = prn
     )
   }
+}
+
+private class ReactPropAsViewComponentInput extends ViewComponentInput {
+  ReactPropAsViewComponentInput() { this = any(ReactComponent c).getADirectPropsAccess() }
+
+  override string getSourceType() { result = "React props" }
 }

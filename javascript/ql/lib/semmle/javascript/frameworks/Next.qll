@@ -241,9 +241,6 @@ module NextJS {
     }
   }
 
-  /** DEPRECATED: Alias for NextApiRouteHandler */
-  deprecated class NextAPIRouteHandler = NextApiRouteHandler;
-
   /**
    * Gets a reference to a [Next.js router](https://nextjs.org/docs/api-reference/next/router).
    */
@@ -257,5 +254,21 @@ module NextJS {
           .getParameter(0)
           .getMember("router")
           .asSource()
+  }
+
+  /**
+   * Provides classes and predicates modeling the `next-auth` library.
+   */
+  private module NextAuth {
+    /**
+     * A random string used to hash tokens, sign cookies and generate cryptographic keys as a `CredentialsNode`.
+     */
+    private class SecretKey extends CredentialsNode {
+      SecretKey() {
+        this = API::moduleImport("next-auth").getParameter(0).getMember("secret").asSink()
+      }
+
+      override string getCredentialsKind() { result = "jwt key" }
+    }
   }
 }
