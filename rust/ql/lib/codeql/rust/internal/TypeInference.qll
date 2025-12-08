@@ -9,6 +9,7 @@ private import TypeMention
 private import typeinference.FunctionType
 private import typeinference.FunctionOverloading as FunctionOverloading
 private import typeinference.BlanketImplementation as BlanketImplementation
+private import codeql.rust.elements.internal.VariableImpl::Impl as VariableImpl
 private import codeql.rust.internal.CachedStages
 private import codeql.typeinference.internal.TypeInference
 private import codeql.rust.frameworks.stdlib.Stdlib
@@ -672,7 +673,7 @@ private predicate typeEquality(AstNode n1, TypePath prefix1, AstNode n2, TypePat
 
 /**
  * Holds if `child` is a child of `parent`, and the Rust compiler applies [least
- * upper bound (LUB) coercion](1) to infer the type of `parent` from the type of
+ * upper bound (LUB) coercion][1] to infer the type of `parent` from the type of
  * `child`.
  *
  * In this case, we want type information to only flow from `child` to `parent`,
@@ -1645,9 +1646,14 @@ private module MethodResolution {
   }
 
   private class MethodCallIndexExpr extends MethodCall instanceof IndexExpr {
+    private predicate isInMutableContext() {
+      // todo: does not handle all cases yet
+      VariableImpl::assignmentOperationDescendant(_, this)
+    }
+
     pragma[nomagic]
     override predicate hasNameAndArity(string name, int arity) {
-      name = "index" and
+      (if this.isInMutableContext() then name = "index_mut" else name = "index") and
       arity = 1
     }
 
@@ -1661,7 +1667,11 @@ private module MethodResolution {
 
     override predicate supportsAutoDerefAndBorrow() { any() }
 
-    override Trait getTrait() { result.getCanonicalPath() = "core::ops::index::Index" }
+    override Trait getTrait() {
+      if this.isInMutableContext()
+      then result.getCanonicalPath() = "core::ops::index::IndexMut"
+      else result.getCanonicalPath() = "core::ops::index::Index"
+    }
   }
 
   private class MethodCallCallExpr extends MethodCall instanceof CallExpr {
@@ -3522,12 +3532,27 @@ private module Cached {
     any(MethodResolution::MethodCall mc).argumentHasImplicitBorrow(n)
   }
 
-  /** Gets an item (function or tuple struct/variant) that `call` resolves to, if any. */
+  /**
+   * Gets an item (function or tuple struct/variant) that `call` resolves to, if
+   * any.
+   *
+   * The parameter `dispatch` is `true` if and only if the resolved target is a
+   * trait item because a precise target could not be determined from the
+   * types (for instance in the presence of generics or `dyn` types)
+   */
   cached
-  Addressable resolveCallTarget(Expr call) {
-    result = call.(MethodResolution::MethodCall).resolveCallTarget(_, _, _)
+  Addressable resolveCallTarget(InvocationExpr call, boolean dispatch) {
+    dispatch = false and
+    result = call.(NonMethodResolution::NonMethodCall).resolveCallTargetViaPathResolution()
     or
-    result = call.(NonMethodResolution::NonMethodCall).resolveCallTarget()
+    exists(ImplOrTraitItemNode i |
+      i instanceof TraitItemNode and dispatch = true
+      or
+      i instanceof ImplItemNode and dispatch = false
+    |
+      result = call.(MethodResolution::MethodCall).resolveCallTarget(i, _, _) or
+      result = call.(NonMethodResolution::NonMethodCall).resolveCallTargetViaTypeInference(i)
+    )
   }
 
   /**
@@ -3668,9 +3693,9 @@ private module Debug {
     result = inferType(n, path)
   }
 
-  Addressable debugResolveCallTarget(InvocationExpr c) {
+  Addressable debugResolveCallTarget(InvocationExpr c, boolean dispatch) {
     c = getRelevantLocatable() and
-    result = resolveCallTarget(c)
+    result = resolveCallTarget(c, dispatch)
   }
 
   predicate debugConditionSatisfiesConstraint(
